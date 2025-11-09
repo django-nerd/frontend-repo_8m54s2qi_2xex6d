@@ -4,6 +4,9 @@ import CategoryGrid from './components/CategoryGrid';
 import ProductSection from './components/ProductSection';
 import CartDrawer from './components/CartDrawer';
 import FooterRetro from './components/FooterRetro';
+import Breadcrumbs from './components/Breadcrumbs';
+import Carousel from './components/Carousel';
+import ScrollParallax from './components/ScrollParallax';
 
 function useHashRoute() {
   const [route, setRoute] = useState(window.location.hash || '#/');
@@ -15,6 +18,19 @@ function useHashRoute() {
   return [route, (r) => (window.location.hash = r)];
 }
 
+const PATHS = {
+  home: '#/',
+  category: (cat) => `#/category/${encodeURIComponent(cat)}`,
+  subcategory: (cat, sub) => `#/category/${encodeURIComponent(cat)}/${encodeURIComponent(sub)}`,
+  product: (id) => `#/product/${encodeURIComponent(id)}`,
+  checkout: '#/checkout',
+  login: '#/login',
+  admin: '#/admin',
+  adminUsers: '#/admin/users',
+  adminSalary: '#/admin/salary',
+  adminSettings: '#/admin/settings',
+};
+
 export default function App() {
   const [route] = useHashRoute();
   const [darkMode, setDarkMode] = useState(true);
@@ -24,7 +40,6 @@ export default function App() {
   const cartCount = useMemo(() => items.reduce((s, i) => s + i.qty, 0), [items]);
 
   const addToCart = (item) => {
-    // merge by id + meta
     setItems((prev) => {
       const idx = prev.findIndex((p) => p.id === item.id && p.meta === item.meta);
       if (idx >= 0) {
@@ -38,14 +53,22 @@ export default function App() {
   };
   const removeItem = (item) => setItems((prev) => prev.filter((p) => !(p.id === item.id && p.meta === item.meta)));
 
+  // Routing guards for admin subpages
+  const isAdmin = route.startsWith('#/admin');
+
   return (
-    <div className={`${darkMode ? 'dark' : ''} min-h-screen bg-[#101020] text-white`}>      
-      {route.startsWith('#/admin') ? (
-        <AdminPage darkMode={darkMode} setDarkMode={setDarkMode} />
+    <div className={`${darkMode ? 'dark' : ''} min-h-screen bg-[#101020] text-white`}> 
+      <Breadcrumbs route={route} />
+      {isAdmin ? (
+        <AdminPage darkMode={darkMode} setDarkMode={setDarkMode} route={route} />
       ) : route.startsWith('#/checkout') ? (
         <CheckoutPage items={items} onClear={() => setItems([])} />
       ) : route.startsWith('#/login') ? (
         <AuthPage />
+      ) : route.startsWith('#/category') ? (
+        <CategoryPage route={route} onAdd={addToCart} />
+      ) : route.startsWith('#/product') ? (
+        <ProductDetailPage route={route} onAdd={addToCart} />
       ) : (
         <>
           <ParallaxHero
@@ -54,8 +77,24 @@ export default function App() {
             cartCount={cartCount}
             onOpenCart={() => setCartOpen(true)}
           />
-          <CategoryGrid onSelect={(id) => setActiveCategory(id)} />
-          <ProductSection activeCategory={activeCategory} onAdd={addToCart} />
+
+          <div className="max-w-6xl mx-auto px-6">
+            <Carousel />
+          </div>
+
+          <ScrollParallax className="relative py-14 sm:py-16 md:py-20">
+            <div data-speed="0.15" className="absolute inset-0 pointer-events-none opacity-50">
+              <div className="absolute -top-10 -left-10 w-80 h-80 rounded-full bg-fuchsia-500/20 blur-3xl" />
+              <div className="absolute top-20 -right-10 w-96 h-96 rounded-full bg-cyan-400/20 blur-3xl" />
+            </div>
+            <div data-speed="0" className="relative z-10">
+              <div className="max-w-6xl mx-auto px-6">
+                <CategoryGrid onSelect={(id) => { setActiveCategory(id); window.location.hash = PATHS.category(id); }} />
+                <ProductSection activeCategory={activeCategory} onAdd={addToCart} />
+              </div>
+            </div>
+          </ScrollParallax>
+
           <FooterRetro />
           <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} items={items} onRemove={removeItem} />
         </>
@@ -134,16 +173,23 @@ function AuthPage() {
   );
 }
 
-function AdminPage({ darkMode, setDarkMode }) {
-  const [categories, setCategories] = useState([
-    { id: 'game', name: 'Game Top-up' },
-    { id: 'apps', name: 'Premium Apps' },
-  ]);
-  const [newCat, setNewCat] = useState('');
+function AdminTabs() {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <a href="#/admin" className="px-3 py-2 rounded-2xl bg-white/10 border border-white/15">Overview</a>
+      <a href="#/admin/users" className="px-3 py-2 rounded-2xl bg-white/10 border border-white/15">Users</a>
+      <a href="#/admin/salary" className="px-3 py-2 rounded-2xl bg-white/10 border border-white/15">Salary</a>
+      <a href="#/admin/settings" className="px-3 py-2 rounded-2xl bg-white/10 border border-white/15">Web Settings</a>
+    </div>
+  );
+}
+
+function AdminPage({ darkMode, setDarkMode, route }) {
+  const sub = route.replace('#/admin', '') || '';
 
   return (
     <div className={`${darkMode ? 'dark' : ''} min-h-screen bg-gradient-to-br from-[#101020] to-[#191937] text-white`}>
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">Admin Dashboard</h2>
           <div className="flex gap-2">
@@ -153,43 +199,171 @@ function AdminPage({ darkMode, setDarkMode }) {
           </div>
         </div>
 
-        <div className="mt-6 grid md:grid-cols-2 gap-6">
-          <div className="p-5 rounded-3xl bg-white/5 border border-white/10">
-            <div className="font-semibold">Categories</div>
-            <ul className="mt-3 space-y-2">
-              {categories.map((c) => (
-                <li key={c.id} className="flex items-center justify-between px-3 py-2 rounded-2xl bg-white/10 border border-white/15">
-                  <span>{c.name}</span>
-                  <button onClick={()=>setCategories(prev=>prev.filter(p=>p.id!==c.id))} className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/15">Delete</button>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-4 flex gap-2">
-              <input value={newCat} onChange={(e)=>setNewCat(e.target.value)} placeholder="New category name" className="flex-1 px-4 py-2 rounded-2xl bg-white/10 border border-white/15 outline-none" />
-              <button onClick={()=>{ if(!newCat.trim()) return; const id=newCat.toLowerCase().replace(/\s+/g,'-'); setCategories(prev=>[...prev,{id,name:newCat}]); setNewCat(''); }} className="px-4 py-2 rounded-2xl bg-gradient-to-r from-fuchsia-600 to-cyan-500">Add</button>
-            </div>
+        <AdminTabs />
+
+        {sub === '' && <AdminOverview />}
+        {sub.startsWith('/') && sub === '/users' && <AdminUsers />}
+        {sub.startsWith('/') && sub === '/salary' && <AdminSalary />}
+        {sub.startsWith('/') && sub === '/settings' && <AdminSettings />}
+      </div>
+    </div>
+  );
+}
+
+function AdminOverview() {
+  return (
+    <div className="grid md:grid-cols-2 gap-6">
+      <div className="p-5 rounded-3xl bg-white/5 border border-white/10">
+        <div className="font-semibold">Categories</div>
+        <div className="text-sm mt-2 opacity-80">Manage categories, subcategories, and products in dedicated pages.</div>
+      </div>
+      <div className="p-5 rounded-3xl bg-white/5 border border-white/10">
+        <div className="font-semibold">Transactions</div>
+        <div className="mt-3 grid grid-cols-1 gap-2 text-sm">
+          <div className="px-3 py-2 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-between">
+            <span>#TRX-001 • Success</span>
+            <span className="text-emerald-300">Rp 120.000</span>
           </div>
-          <div className="p-5 rounded-3xl bg-white/5 border border-white/10">
-            <div className="font-semibold">Transactions</div>
-            <div className="mt-3 grid grid-cols-1 gap-2 text-sm">
-              <div className="px-3 py-2 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-between">
-                <span>#TRX-001 • Success</span>
-                <span className="text-emerald-300">Rp 120.000</span>
-              </div>
-              <div className="px-3 py-2 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-between">
-                <span>#TRX-002 • Pending</span>
-                <span className="text-amber-300">Rp 65.000</span>
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="font-semibold">Deposit (Mock)</div>
-              <div className="mt-2 flex gap-2">
-                <input placeholder="Amount" className="flex-1 px-4 py-2 rounded-2xl bg-white/10 border border-white/15 outline-none" />
-                <button className="px-4 py-2 rounded-2xl bg-gradient-to-r from-fuchsia-600 to-cyan-500">Confirm</button>
-              </div>
-            </div>
+          <div className="px-3 py-2 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-between">
+            <span>#TRX-002 • Pending</span>
+            <span className="text-amber-300">Rp 65.000</span>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminUsers() {
+  const [users, setUsers] = useState([
+    { id: 'U001', name: 'Arif', email: 'arif@example.com', role: 'admin' },
+    { id: 'U002', name: 'Sinta', email: 'sinta@example.com', role: 'user' },
+  ]);
+  const [form, setForm] = useState({ name: '', email: '', role: 'user' });
+
+  return (
+    <div className="grid md:grid-cols-2 gap-6">
+      <div className="p-5 rounded-3xl bg-white/5 border border-white/10">
+        <div className="font-semibold">Add User</div>
+        <div className="mt-3 grid grid-cols-1 gap-2">
+          <input value={form.name} onChange={(e)=>setForm({...form, name: e.target.value})} placeholder="Name" className="px-4 py-2 rounded-2xl bg-white/10 border border-white/15 outline-none" />
+          <input value={form.email} onChange={(e)=>setForm({...form, email: e.target.value})} placeholder="Email" className="px-4 py-2 rounded-2xl bg-white/10 border border-white/15 outline-none" />
+          <select value={form.role} onChange={(e)=>setForm({...form, role: e.target.value})} className="px-4 py-2 rounded-2xl bg-white/10 border border-white/15 outline-none">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button onClick={()=>{ if(!form.name||!form.email) return; const id = 'U' + (Math.random()*1000|0).toString().padStart(3,'0'); setUsers(prev=>[...prev, { id, ...form }]); setForm({ name:'', email:'', role:'user' }); }} className="px-4 py-2 rounded-2xl bg-gradient-to-r from-fuchsia-600 to-cyan-500">Save</button>
+        </div>
+      </div>
+      <div className="p-5 rounded-3xl bg-white/5 border border-white/10">
+        <div className="font-semibold">Users</div>
+        <div className="mt-3 space-y-2">
+          {users.map((u)=> (
+            <div key={u.id} className="px-3 py-2 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-between">
+              <div>
+                <div className="font-medium">{u.name} <span className="text-xs opacity-70">({u.role})</span></div>
+                <div className="text-xs opacity-70">{u.email}</div>
+              </div>
+              <button onClick={()=>setUsers(prev=>prev.filter(p=>p.id!==u.id))} className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/15">Delete</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminSalary() {
+  const [records, setRecords] = useState([
+    { id: 'S001', name: 'Arif', amount: 3500000, month: '2025-10' },
+  ]);
+  const [form, setForm] = useState({ name: '', amount: '', month: '' });
+
+  return (
+    <div className="grid md:grid-cols-2 gap-6">
+      <div className="p-5 rounded-3xl bg-white/5 border border-white/10">
+        <div className="font-semibold">Add Salary</div>
+        <div className="mt-3 grid grid-cols-1 gap-2">
+          <input value={form.name} onChange={(e)=>setForm({...form, name: e.target.value})} placeholder="Name" className="px-4 py-2 rounded-2xl bg-white/10 border border-white/15 outline-none" />
+          <input type="number" value={form.amount} onChange={(e)=>setForm({...form, amount: e.target.value})} placeholder="Amount" className="px-4 py-2 rounded-2xl bg-white/10 border border-white/15 outline-none" />
+          <input type="month" value={form.month} onChange={(e)=>setForm({...form, month: e.target.value})} className="px-4 py-2 rounded-2xl bg-white/10 border border-white/15 outline-none" />
+          <button onClick={()=>{ if(!form.name||!form.amount||!form.month) return; const id='S'+(Math.random()*1000|0).toString().padStart(3,'0'); setRecords(prev=>[...prev,{ id, name: form.name, amount: Number(form.amount), month: form.month }]); setForm({ name:'', amount:'', month:'' }); }} className="px-4 py-2 rounded-2xl bg-gradient-to-r from-fuchsia-600 to-cyan-500">Save</button>
+        </div>
+      </div>
+      <div className="p-5 rounded-3xl bg-white/5 border border-white/10">
+        <div className="font-semibold">Salary Records</div>
+        <div className="mt-3 space-y-2">
+          {records.map((r)=> (
+            <div key={r.id} className="px-3 py-2 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-between">
+              <div>
+                <div className="font-medium">{r.name}</div>
+                <div className="text-xs opacity-70">{r.month}</div>
+              </div>
+              <div className="text-emerald-300">Rp {r.amount.toLocaleString('id-ID')}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminSettings() {
+  const [settings, setSettings] = useState({ brand: 'Digital Store Hub', theme: 'retro-soft', primary: '#a21caf' });
+  return (
+    <div className="grid md:grid-cols-2 gap-6">
+      <div className="p-5 rounded-3xl bg-white/5 border border-white/10">
+        <div className="font-semibold">Brand & Theme</div>
+        <div className="mt-3 grid grid-cols-1 gap-2">
+          <input value={settings.brand} onChange={(e)=>setSettings({...settings, brand: e.target.value})} className="px-4 py-2 rounded-2xl bg-white/10 border border-white/15 outline-none" />
+          <select value={settings.theme} onChange={(e)=>setSettings({...settings, theme: e.target.value})} className="px-4 py-2 rounded-2xl bg-white/10 border border-white/15 outline-none">
+            <option value="retro-soft">Retro Soft UI</option>
+            <option value="pastel-neon">Pastel Neon</option>
+            <option value="pixel-art">Pixel Art</option>
+          </select>
+          <div className="flex items-center gap-2">
+            <label className="text-sm opacity-80">Primary</label>
+            <input type="color" value={settings.primary} onChange={(e)=>setSettings({...settings, primary: e.target.value})} />
+          </div>
+        </div>
+      </div>
+      <div className="p-5 rounded-3xl bg-white/5 border border-white/10">
+        <div className="font-semibold">Preview</div>
+        <div className="mt-3 p-6 rounded-2xl border border-white/10" style={{ background: `linear-gradient(135deg, ${settings.primary}22, transparent)` }}>
+          <div className="text-lg font-bold" style={{ color: settings.primary }}>{settings.brand}</div>
+          <div className="text-xs opacity-80">Theme: {settings.theme}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CategoryPage({ route, onAdd }) {
+  const parts = route.replace(/^#\//,'').split('/').slice(1); // ['game'] or ['game','Mobile%20Legends']
+  const category = decodeURIComponent(parts[0] || '');
+  const sub = decodeURIComponent(parts[1] || '');
+
+  return (
+    <div className="min-h-screen">
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <h2 className="text-2xl font-bold">{sub ? `${sub} — ${category}` : category}</h2>
+        <div className="mt-6">
+          <ProductSection activeCategory={category} onAdd={onAdd} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProductDetailPage({ route, onAdd }) {
+  const id = decodeURIComponent(route.split('/').pop() || '');
+  // For demo, navigate back to home products
+  return (
+    <div className="min-h-[50vh] max-w-4xl mx-auto px-6 py-10">
+      <h2 className="text-2xl font-bold">Product: {id}</h2>
+      <div className="text-sm opacity-80 mt-2">This is a simple detail page stub. Choose from listings to add to cart.</div>
+      <div className="mt-6">
+        <a href="#/" className="px-4 py-2 rounded-2xl bg-white/10 border border-white/15">Back</a>
       </div>
     </div>
   );
